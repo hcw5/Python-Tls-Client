@@ -18,25 +18,49 @@ class Session:
 
     def __init__(
         self,
-        client_identifier: ClientIdentifiers = "chrome_120",
+        client_identifier: ClientIdentifiers = "chrome_133",
         ja3_string: Optional[str] = None,
         h2_settings: Optional[Dict[str, int]] = None,
         h2_settings_order: Optional[List[str]] = None,
+        h3_settings: Optional[Dict[str, int]] = None,
+        h3_settings_order: Optional[List[str]] = None,
+        h3_pseudo_header_order: Optional[List[str]] = None,
         supported_signature_algorithms: Optional[List[str]] = None,
         supported_delegated_credentials_algorithms: Optional[List[str]] = None,
         supported_versions: Optional[List[str]] = None,
         key_share_curves: Optional[List[str]] = None,
+        alpn_protocols: Optional[List[str]] = None,
+        alps_protocols: Optional[List[str]] = None,
+        ech_candidate_payloads: Optional[List[int]] = None,
+        ech_candidate_cipher_suites: Optional[List[Dict[str, str]]] = None,
         cert_compression_algo: str = None,
+        cert_compression_algos: Optional[List[str]] = None,
+        record_size_limit: Optional[int] = None,
         additional_decode: str = None,
         pseudo_header_order: Optional[List[str]] = None,
         connection_flow: Optional[int] = None,
         priority_frames: Optional[list] = None,
         header_order: Optional[List[str]] = None,
-        header_priority: Optional[List[str]] = None,
+        header_priority: Optional[Dict[str, Union[int, bool]]] = None,
+        stream_id: Optional[int] = None,
+        h3_priority_param: Optional[int] = None,
+        h3_send_grease_frames: Optional[bool] = None,
+        allow_http: Optional[bool] = None,
         random_tls_extension_order: Optional = False,
         force_http1: Optional = False,
+        disable_http3: Optional = False,
+        with_protocol_racing: Optional = False,
+        disable_ipv6: Optional = False,
+        disable_ipv4: Optional = False,
         catch_panics: Optional = False,
         debug: Optional = False,
+        default_headers: Optional[Dict[str, List[str]]] = None,
+        connect_headers: Optional[Dict[str, List[str]]] = None,
+        local_address: Optional[str] = None,
+        server_name_overwrite: Optional[str] = None,
+        with_custom_cookie_jar: Optional[bool] = None,
+        without_cookie_jar: Optional[bool] = None,
+        transport_options: Optional[Dict[str, Union[int, bool]]] = None,
         certificate_pinning: Optional[Dict[str, List[str]]] = None,
     ) -> None:
         self._session_id = str(uuid.uuid4())
@@ -117,6 +141,9 @@ class Session:
         #     "MAX_HEADER_LIST_SIZE"
         # ]
         self.h2_settings_order = h2_settings_order
+        self.h3_settings = h3_settings
+        self.h3_settings_order = h3_settings_order
+        self.h3_pseudo_header_order = h3_pseudo_header_order
 
         # Supported Signature Algorithms
         # Possible Settings:
@@ -202,10 +229,15 @@ class Session:
         #     "X25519"
         # ]
         self.key_share_curves = key_share_curves
+        self.alpn_protocols = alpn_protocols
+        self.alps_protocols = alps_protocols
+        self.ech_candidate_payloads = ech_candidate_payloads
+        self.ech_candidate_cipher_suites = ech_candidate_cipher_suites
 
         # Cert Compression Algorithm
         # Examples: "zlib", "brotli", "zstd"
         self.cert_compression_algo = cert_compression_algo
+        self.cert_compression_algos = cert_compression_algos
 
         # Additional Decode
         # Make sure the go code decodes the response body once explicit by provided algorithm.
@@ -264,12 +296,20 @@ class Session:
         #   "weight": 1
         # }
         self.header_priority = header_priority
+        self.stream_id = stream_id
+        self.h3_priority_param = h3_priority_param
+        self.h3_send_grease_frames = h3_send_grease_frames
+        self.allow_http = allow_http
 
         # randomize tls extension order
         self.random_tls_extension_order = random_tls_extension_order
 
         # force HTTP1
         self.force_http1 = force_http1
+        self.disable_http3 = disable_http3
+        self.with_protocol_racing = with_protocol_racing
+        self.disable_ipv6 = disable_ipv6
+        self.disable_ipv4 = disable_ipv4
 
         # catch panics
         # avoid the tls client to print the whole stacktrace when a panic (critical go error) happens
@@ -277,6 +317,14 @@ class Session:
 
         # debugging
         self.debug = debug
+        self.default_headers = default_headers
+        self.connect_headers = connect_headers
+        self.local_address = local_address
+        self.server_name_overwrite = server_name_overwrite
+        self.with_custom_cookie_jar = with_custom_cookie_jar
+        self.without_cookie_jar = without_cookie_jar
+        self.transport_options = transport_options
+        self.record_size_limit = record_size_limit
 
     def __enter__(self):
         return self
@@ -313,7 +361,14 @@ class Session:
         allow_redirects: Optional[bool] = False,
         insecure_skip_verify: Optional[bool] = False,
         timeout_seconds: Optional[int] = None,
-        proxy: Optional[dict] = None  # Optional[dict[str, str]]
+        timeout_milliseconds: Optional[int] = None,
+        proxy: Optional[dict] = None,  # Optional[dict[str, str]]
+        request_host_override: Optional[str] = None,
+        is_byte_response: Optional[bool] = False,
+        is_rotating_proxy: Optional[bool] = False,
+        stream_output_path: Optional[str] = None,
+        stream_output_block_size: Optional[int] = None,
+        stream_output_eof_symbol: Optional[str] = None,
     ) -> Response:
         # --- URL ------------------------------------------------------------------------------------------------------
         # Prepare URL - add params to url
@@ -391,12 +446,29 @@ class Session:
             "sessionId": self._session_id,
             "followRedirects": allow_redirects,
             "forceHttp1": self.force_http1,
+            "disableHttp3": self.disable_http3,
+            "withProtocolRacing": self.with_protocol_racing,
+            "disableIPV6": self.disable_ipv6,
+            "disableIPV4": self.disable_ipv4,
             "withDebug": self.debug,
             "catchPanics": self.catch_panics,
             "headers": dict(headers),
+            "defaultHeaders": self.default_headers,
+            "connectHeaders": self.connect_headers,
+            "localAddress": self.local_address,
+            "serverNameOverwrite": self.server_name_overwrite,
             "headerOrder": self.header_order,
             "insecureSkipVerify": insecure_skip_verify,
             "isByteRequest": is_byte_request,
+            "isByteResponse": is_byte_response,
+            "isRotatingProxy": is_rotating_proxy,
+            "withCustomCookieJar": self.with_custom_cookie_jar,
+            "withoutCookieJar": self.without_cookie_jar,
+            "transportOptions": self.transport_options,
+            "requestHostOverride": request_host_override,
+            "streamOutputPath": stream_output_path,
+            "streamOutputBlockSize": stream_output_block_size,
+            "streamOutputEOFSymbol": stream_output_eof_symbol,
             "additionalDecode": self.additional_decode,
             "proxyUrl": proxy,
             "requestUrl": url,
@@ -404,23 +476,39 @@ class Session:
             "requestBody": base64.b64encode(request_body).decode() if is_byte_request else request_body,
             "requestCookies": request_cookies,
             "timeoutSeconds": timeout_seconds,
+            "timeoutMilliseconds": timeout_milliseconds,
         }
         if certificate_pinning:
             request_payload["certificatePinningHosts"] = certificate_pinning
         if self.client_identifier is None:
+            cert_compression_algos = self.cert_compression_algos
+            if cert_compression_algos is None and self.cert_compression_algo is not None:
+                cert_compression_algos = [self.cert_compression_algo]
             request_payload["customTlsClient"] = {
                 "ja3String": self.ja3_string,
                 "h2Settings": self.h2_settings,
                 "h2SettingsOrder": self.h2_settings_order,
+                "h3Settings": self.h3_settings,
+                "h3SettingsOrder": self.h3_settings_order,
+                "h3PseudoHeaderOrder": self.h3_pseudo_header_order,
                 "pseudoHeaderOrder": self.pseudo_header_order,
                 "connectionFlow": self.connection_flow,
                 "priorityFrames": self.priority_frames,
                 "headerPriority": self.header_priority,
-                "certCompressionAlgo": self.cert_compression_algo,
+                "certCompressionAlgos": cert_compression_algos,
                 "supportedVersions": self.supported_versions,
                 "supportedSignatureAlgorithms": self.supported_signature_algorithms,
                 "supportedDelegatedCredentialsAlgorithms": self.supported_delegated_credentials_algorithms ,
                 "keyShareCurves": self.key_share_curves,
+                "alpnProtocols": self.alpn_protocols,
+                "alpsProtocols": self.alps_protocols,
+                "ECHCandidatePayloads": self.ech_candidate_payloads,
+                "ECHCandidateCipherSuites": self.ech_candidate_cipher_suites,
+                "recordSizeLimit": self.record_size_limit,
+                "streamId": self.stream_id,
+                "h3PriorityParam": self.h3_priority_param,
+                "h3SendGreaseFrames": self.h3_send_grease_frames,
+                "allowHttp": self.allow_http,
             }
         else:
             request_payload["tlsClientIdentifier"] = self.client_identifier
